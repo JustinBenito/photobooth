@@ -20,7 +20,7 @@ let calibrationSamples = [];
 let calibrationOffset = { x: 0, y: 0, z: 0 };
 let shoulderCalibrationOffset = { left: 0, right: 0 };
 let calibrationStartTime = null;
-const CALIBRATION_DURATION = 5000; // 5 seconds for better accuracy
+const CALIBRATION_DURATION = 6000; // 5 seconds
 const CALIBRATION_SAMPLE_RATE = 100; // Sample every 100ms
 let isCalibrated = false;
 
