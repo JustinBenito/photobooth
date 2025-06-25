@@ -57,10 +57,10 @@ let spine = null;
 
 // Load GLB model
 const loader = new GLTFLoader();
-loader.load('models/humanoid.glb', (gltf) => {
+loader.load('models/char.glb', (gltf) => {
   const model = gltf.scene;
   model.scale.set(1.5, 1.5, 1.5);
-  model.position.set(0, -1.5, 0);
+  model.position.set(0, -2.0, -1);
   scene.add(model);
 
   // Find the bones
@@ -114,7 +114,7 @@ loader.load('models/humanoid.glb', (gltf) => {
 });
 
 // Camera position
-camera.position.z = 2;
+camera.position.z = 3;
 
 function degToRad(degrees) {
   return degrees * (Math.PI / 180);
@@ -158,25 +158,25 @@ window.addEventListener('unifiedPoseUpdate', (event) => {
     
   leftForearmBone.rotation.x = forearms.left.x; // works but I generall am not a big fan of it, this moves in the left and right axis only. I think a clamp maybe would make this a bit more powerful than what it is right now :)
   //   // leftForearmBone.rotation.y = forearms.left.y; // half baked but decent. But also when I do the trial run I cant see anything that is useful from it so I am wondering if it is any useful at all
-  leftForearmBone.rotation.z = -forearms.left.z; // if required a negative would do the job, something is working the front and back going arms are all working and I am here wondering what the hell how is this possible
+  //leftForearmBone.rotation.z = forearms.left.z; // if required a negative would do the job, something is working the front and back going arms are all working and I am here wondering what the hell how is this possible
 
     
  rightForearmBone.rotation.x= forearms.right.x; // works but I generall am not a big fan of it, this moves in the left and right axis only. I think a clamp maybe would make this a bit more powerful than what it is right now :)
   //    // rightForearmBone.rotation.y = forearms.right.y; // But also when I do the trial run I cant see anything that is useful from it so I am wondering if it is any useful at all
-  rightForearmBone.rotation.z = -forearms.right.z; // if required a negative would do the job, something is working the front and back going arms are all working and I am here wondering what the hell how is this possible
+  //rightForearmBone.rotation.z = forearms.right.z; // if required a negative would do the job, something is working the front and back going arms are all working and I am here wondering what the hell how is this possible
 
   //   console.log("forearms", forearms)
    }
 
   if ( leftwrist && rightwrist ) {
     // Apply wrist rotations (pitch, yaw, roll)
-    leftwrist.rotation.x = wrist.left.x;
+    //leftwrist.rotation.x = wrist.left.x;
      //leftwrist.rotation.y = wrist.left.y;
-     leftwrist.rotation.z = -wrist.left.z;
+    //  leftwrist.rotation.z = -wrist.left.z;
 
     //rightwrist.rotation.x = wrist.right.x;
-     rightwrist.rotation.y = wrist.right.y;
-     rightwrist.rotation.z = -wrist.right.z;
+    // rightwrist.rotation.y = wrist.right.y;
+    //  rightwrist.rotation.z = -wrist.right.z;
   }
 
   // if (leftThighBone && rightThighBone) {
@@ -230,18 +230,18 @@ function compositeAROutput() {
   arOutputCtx.drawImage(threeJsCanvas, 0, 0, arOutputCanvas.width, arOutputCanvas.height);
 
   // 3. Use the mask to ERASE the 3D model where the person is present
-  if (maskCanvas && maskCanvas.width && maskCanvas.height) {
-    arOutputCtx.save();
-    arOutputCtx.globalCompositeOperation = 'destination-out';
-    arOutputCtx.drawImage(maskCanvas, 0, 0, arOutputCanvas.width, arOutputCanvas.height);
-    arOutputCtx.restore();
+  // if (maskCanvas && maskCanvas.width && maskCanvas.height) {
+  //   arOutputCtx.save();
+  //   arOutputCtx.globalCompositeOperation = 'destination-out';
+  //   arOutputCtx.drawImage(maskCanvas, 0, 0, arOutputCanvas.width, arOutputCanvas.height);
+  //   arOutputCtx.restore();
 
-    // (Optional) Draw the video again where the mask is present for perfect edges
-    arOutputCtx.save();
-    arOutputCtx.globalCompositeOperation = 'destination-atop';
-    arOutputCtx.drawImage(video, 0, 0, arOutputCanvas.width, arOutputCanvas.height);
-    arOutputCtx.restore();
-  }
+  //   // (Optional) Draw the video again where the mask is present for perfect edges
+  //   arOutputCtx.save();
+  //   arOutputCtx.globalCompositeOperation = 'destination-atop';
+  //   arOutputCtx.drawImage(video, 0, 0, arOutputCanvas.width, arOutputCanvas.height);
+  //   arOutputCtx.restore();
+  // }
 }
 
 // Hide the Three.js, mask, and debug canvases so only the AR output is visible

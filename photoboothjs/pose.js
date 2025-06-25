@@ -416,7 +416,7 @@ function calculateCalibrationOffset() {
     z: torsoSum.z / calibrationSamples.length
   };
 
-  // Calculate wrist calibration offset
+  // Calculate wrist calibration offset (T-pose neutral)
   const wristSum = calibrationSamples.reduce((acc, sample) => ({
     left: {
       x: acc.left.x + (sample.wristAngles?.left?.x || 0),
@@ -1416,6 +1416,11 @@ function drawDebugInfo() {
   canvasCtx.fillText(`Lean forward/backward to see Torso Pitch change`, 10, 620);
   canvasCtx.fillText(`Turn left/right to see Torso Yaw change`, 10, 640);
   canvasCtx.fillText(`Tilt left/right to see Torso Roll change`, 10, 660);
+
+  // Wrist angles (blue text)
+  canvasCtx.fillStyle = '#0000FF';
+  canvasCtx.fillText(`Left Wrist - Pitch: ${(debugInfo.wrists.left.x ).toFixed(3)}° Yaw: ${(debugInfo.wrists.left.y ).toFixed(3)}° Roll: ${(debugInfo.wrists.left.z ).toFixed(3)}°`, 10, 690);
+  canvasCtx.fillText(`Right Wrist - Pitch: ${(debugInfo.wrists.right.x ).toFixed(3)}° Yaw: ${(debugInfo.wrists.right.y ).toFixed(3)}° Roll: ${(debugInfo.wrists.right.z).toFixed(3)}°`, 10, 720);
 }
 
 function calculateThighAngles(landmarks) {
@@ -1481,61 +1486,87 @@ function calculateThighRotation(hip, knee, reference) {
 function calculateWristAngles(landmarks) {
   if (!landmarks) return { left: { x: 0, y: 0, z: 0 }, right: { x: 0, y: 0, z: 0 } };
 
-  // Use wrist, index, and pinky for orientation
-  // MediaPipe Pose: 15=left_wrist, 17=left_pinky, 19=left_index
-  //                16=right_wrist, 18=right_pinky, 20=right_index
-  const leftWrist = landmarks[15];
-  const leftPinky = landmarks[17];
-  const leftIndex = landmarks[19];
-  const rightWrist = landmarks[16];
-  const rightPinky = landmarks[18];
-  const rightIndex = landmarks[20];
+  // Helper functions
+  function toVec3(p) {
+    return [p.x, p.y, p.z];
+  }
+  function normalize(v) {
+    const length = Math.hypot(...v);
+    return length > 0.0001 ? v.map((n) => n / length) : [0, 0, 0];
+  }
+  function subtract(a, b) {
+    return [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+  }
+  function cross(a, b) {
+    return [
+      a[1] * b[2] - a[2] * b[1],
+      a[2] * b[0] - a[0] * b[2],
+      a[0] * b[1] - a[1] * b[0],
+    ];
+  }
+  function rotationMatrixToEulerXYZ(m) {
+    let pitch, yaw, roll;
+    if (m[2] < 1) {
+      if (m[2] > -1) {
+        yaw = Math.asin(m[2]);
+        pitch = Math.atan2(-m[5], m[8]);
+        roll = Math.atan2(-m[1], m[0]);
+      } else {
+        yaw = -Math.PI / 2;
+        pitch = -Math.atan2(m[3], m[4]);
+        roll = 0;
+      }
+    } else {
+      yaw = Math.PI / 2;
+      pitch = Math.atan2(m[3], m[4]);
+      roll = 0;
+    }
+    return [pitch, yaw, roll];
+  }
 
-  // Helper to calculate wrist orientation
-  function getWristRotation(wrist, index, pinky, offset) {
-    // Vector from wrist to index (forward direction)
-    const vIndex = {
-      x: index.x - wrist.x,
-      y: index.y - wrist.y,
-      z: index.z - wrist.z
-    };
-    // Vector from wrist to pinky (side direction)
-    const vPinky = {
-      x: pinky.x - wrist.x,
-      y: pinky.y - wrist.y,
-      z: pinky.z - wrist.z
-    };
-    // Normal vector (up direction) via cross product
-    const up = {
-      x: vIndex.y * vPinky.z - vIndex.z * vPinky.y,
-      y: vIndex.z * vPinky.x - vIndex.x * vPinky.z,
-      z: vIndex.x * vPinky.y - vIndex.y * vPinky.x
-    };
-    // Normalize vectors
-    const normalize = (v) => {
-      const len = Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
-      return { x: v.x / len, y: v.y / len, z: v.z / len };
-    };
-    const fwd = normalize(vIndex);
-    const side = normalize(vPinky);
-    const upN = normalize(up);
-    // Pitch: up/down (rotation around side axis)
-    const pitch = Math.asin(fwd.y);
-    // Yaw: left/right (rotation around up axis)
-    const yaw = Math.atan2(fwd.x, fwd.z);
-    // Roll: twist (rotation around forward axis)
-    const roll = Math.atan2(side.y, side.x);
-    // Apply calibration offset
+  function getWristEuler(index, wrist, elbow, offset) {
+    const i = toVec3(index);
+    const w = toVec3(wrist);
+    const e = toVec3(elbow);
+    // Z axis: wrist to index (forward, along the hand)
+    const zAxis = normalize(subtract(i, w));
+    // Y axis: wrist to elbow (up direction for the hand)
+    const yAxis = normalize(subtract(e, w));
+    // X axis: perpendicular to y and z (sideways, thumb direction)
+    const xAxis = normalize(cross(yAxis, zAxis));
+    // Recompute y to ensure orthogonality
+    const yAxisOrtho = normalize(cross(zAxis, xAxis));
+    // Rotation matrix (column-major)
+    const m = [
+      xAxis[0], yAxisOrtho[0], zAxis[0],
+      xAxis[1], yAxisOrtho[1], zAxis[1],
+      xAxis[2], yAxisOrtho[2], zAxis[2],
+    ];
+    // Convert to Euler angles (XYZ order)
+    const [pitch, yaw, roll] = rotationMatrixToEulerXYZ(m);
+    // Subtract calibration offset (T-pose neutral)
     return {
       x: pitch - offset.x,
       y: yaw - offset.y,
       z: roll - offset.z
     };
   }
-  return {
-    left: getWristRotation(leftWrist, leftIndex, leftPinky, wristCalibrationOffset.left),
-    right: getWristRotation(rightWrist, rightIndex, rightPinky, wristCalibrationOffset.right)
-  };
+
+  // Left wrist: 19 (index), 15 (wrist), 13 (elbow)
+  const leftAngles = getWristEuler(
+    landmarks[19], // left index
+    landmarks[15], // left wrist
+    landmarks[13], // left elbow
+    wristCalibrationOffset.left
+  );
+  // Right wrist: 20 (index), 16 (wrist), 14 (elbow)
+  const rightAngles = getWristEuler(
+    landmarks[20], // right index
+    landmarks[16], // right wrist
+    landmarks[14], // right elbow
+    wristCalibrationOffset.right
+  );
+  return { left: leftAngles, right: rightAngles };
 }
 
 // Initialize when the page loads
