@@ -841,7 +841,8 @@ function calculateArmAngles(landmarks) {
     leftShoulder,
     leftElbow,
     leftWrist,
-    { x: leftShoulder.x, y: leftShoulder.y - 1 } // Reference point above shoulder
+    { x: leftShoulder.x, y: leftShoulder.y - 1 },
+    true // isLeft
   );
 
   // Calculate right arm angles
@@ -849,7 +850,8 @@ function calculateArmAngles(landmarks) {
     rightShoulder,
     rightElbow,
     rightWrist,
-    { x: rightShoulder.x, y: rightShoulder.y - 1 } // Reference point above shoulder
+    { x: rightShoulder.x, y: rightShoulder.y - 1 },
+    false // isRight
   );
 
   // Apply calibration offset
@@ -872,7 +874,12 @@ function calculateArmAngles(landmarks) {
   return calibratedAngles;
 }
 
-function calculateArmRotation(shoulder, elbow, wrist, reference) {
+function remapArmVectorToX(v, isLeft) {
+  // Right arm: forward (Z) to +X; Left arm: forward (Z) to -X
+  return { x: isLeft ? -v.z : v.z, y: v.y, z: v.x };
+}
+
+function calculateArmRotation(shoulder, elbow, wrist, reference, isLeft) {
   // Calculate the upper arm vector in 3D space
   const upperArm = {
     x: elbow.x - shoulder.x,
@@ -897,44 +904,24 @@ function calculateArmRotation(shoulder, elbow, wrist, reference) {
     };
   };
 
-  const normalizedUpperArm = normalize(upperArm);
-  const normalizedForearm = normalize(forearm);
+  // Remap so forward is X (+X for right, -X for left)
+  const normalizedUpperArm = remapArmVectorToX(normalize(upperArm), isLeft);
+  const normalizedForearm = remapArmVectorToX(normalize(forearm), isLeft);
 
-  // // Create reference coordinate system for the arm
-  // // Similar to how head pose uses reference points
-  
-  // // Forward vector (positive Z direction)
-  // const forwardVector = { x: 0, y: 0, z: 1 };
-  
-  // // Up vector (negative Y direction in screen space)
-  // const upVector = { x: 0, y: -1, z: 0 };
-  
-  // // Right vector (positive X direction)
-  // const rightVector = { x: 1, y: 0, z: 0 };
-
-  // // Calculate rotations relative to the reference coordinate system
-  // // This is similar to how head pose calculates rotations
-  
-  // // Pitch (X-axis rotation) - forward/backward movement
-  // // Calculate angle between upper arm and the vertical plane (up vector)
+  // Pitch (X-axis rotation) - forward/backward movement (now X)
   const pitch = Math.asin(normalizedUpperArm.y);
-  
-  // Yaw (Y-axis rotation) - left/right movement  
-  // Calculate horizontal angle of upper arm relative to forward direction
+  // Yaw (Y-axis rotation) - left/right movement
   const yaw = Math.atan2(normalizedUpperArm.x, normalizedUpperArm.z);
-  
   // Roll (Z-axis rotation) - twist
-  // Calculate twist by comparing forearm orientation to upper arm
   const roll = Math.atan2(
     normalizedForearm.x * normalizedUpperArm.y - normalizedForearm.y * normalizedUpperArm.x,
     normalizedForearm.z * normalizedUpperArm.y - normalizedForearm.y * normalizedUpperArm.z
   );
 
-  // Convert to degrees and apply scaling
   return {
-    x: pitch ,  // Pitch sensitivity
-    y: yaw ,    // Yaw sensitivity  
-    z: roll    // Roll sensitivity (reduced)
+    x: pitch,
+    y: yaw,
+    z: roll
   };
 }
 
@@ -951,14 +938,16 @@ function calculateForearmAngles(landmarks) {
   const leftForearmAngles = calculateForearmRotation(
     leftElbow,
     leftWrist,
-    { x: leftElbow.x, y: leftElbow.y - 1 } // Reference point above elbow
+    { x: leftElbow.x, y: leftElbow.y - 1 },
+    true // isLeft
   );
 
   // Calculate right forearm angles
   const rightForearmAngles = calculateForearmRotation(
     rightElbow,
     rightWrist,
-    { x: rightElbow.x, y: rightElbow.y - 1 } // Reference point above elbow
+    { x: rightElbow.x, y: rightElbow.y - 1 },
+    false // isRight
   );
 
   // Apply calibration offset
@@ -981,7 +970,7 @@ function calculateForearmAngles(landmarks) {
   return calibratedAngles;
 }
 
-function calculateForearmRotation(elbow, wrist, reference) {
+function calculateForearmRotation(elbow, wrist, reference, isLeft) {
   // Calculate the forearm vector in 3D space
   const forearm = {
     x: wrist.x - elbow.x,
@@ -999,33 +988,20 @@ function calculateForearmRotation(elbow, wrist, reference) {
     };
   };
 
-  const normalizedForearm = normalize(forearm);
+  // Remap so forward is X (+X for right, -X for left)
+  const normalizedForearm = remapArmVectorToX(normalize(forearm), isLeft);
 
-  // Create reference coordinate system for the forearm
-  // Forward vector (positive Z direction)
-  // const forwardVector = { x: 0, y: 0, z: 1 };
-  
-  // // Up vector (negative Y direction in screen space)
-  // const upVector = { x: 0, y: -1, z: 0 };
-  
-  // // Right vector (positive X direction)
-  // const rightVector = { x: 1, y: 0, z: 0 };
-
-  // Calculate rotations relative to the reference coordinate system
-  // Pitch (X-axis rotation) - forward/backward movement
+  // Pitch (X-axis rotation) - forward/backward movement (now X)
   const pitch = Math.asin(normalizedForearm.y);
-  
   // Yaw (Y-axis rotation) - left/right movement
   const yaw = Math.atan2(normalizedForearm.x, normalizedForearm.z);
-  
   // Roll (Z-axis rotation) - twist
   const roll = Math.atan2(normalizedForearm.x, normalizedForearm.y);
 
-  // Convert to degrees and apply scaling
   return {
-    x: pitch ,  // Pitch sensitivity
-    y: yaw ,    // Yaw sensitivity
-    z: roll   // Roll sensitivity (reduced)
+    x: pitch,
+    y: yaw,
+    z: roll
   };
 }
 
