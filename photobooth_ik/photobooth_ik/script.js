@@ -54,7 +54,7 @@ const loader = new THREE.GLTFLoader();
 loader.crossOrigin = "anonymous";
 
 loader.load(
-    "models/test.vrm",
+    "models/vijay.vrm",
   
     gltf => {
       THREE.VRMUtils.removeUnnecessaryJoints(gltf.scene);
@@ -63,6 +63,11 @@ loader.load(
         scene.add(vrm.scene);
         currentVrm = vrm;
         currentVrm.scene.rotation.y = Math.PI; // Rotate model 180deg to face camera
+        currentVrm.scene.position.z = -2;
+        currentVrm.scene.position.x = -2; // Move avatar 2 units away from the camera
+        // Hide loading screen after avatar is loaded
+        const loadingElem = document.getElementById('loading');
+        if (loadingElem) loadingElem.style.display = 'none';
       });
     },
   
@@ -136,6 +141,37 @@ const rigFace = (riggedFace) => {
     }
 };
 
+// Robust hand and finger rigging for VRM using Kalidokit.Hand.solve output
+const rigHand = (vrm, riggedHand, handedness = 'Right') => {
+    if (!vrm || !riggedHand) return;
+    const prefix = handedness.charAt(0).toUpperCase() + handedness.slice(1); // 'Right' or 'Left'
+    const boneNames = [
+        'Wrist',
+        'ThumbProximal', 'ThumbIntermediate', 'ThumbDistal',
+        'IndexProximal', 'IndexIntermediate', 'IndexDistal',
+        'MiddleProximal', 'MiddleIntermediate', 'MiddleDistal',
+        'RingProximal', 'RingIntermediate', 'RingDistal',
+        'LittleProximal', 'LittleIntermediate', 'LittleDistal'
+    ];
+    boneNames.forEach((joint) => {
+        const key = prefix + joint; // e.g., 'RightIndexProximal'
+        const rot = riggedHand[key];
+        if (!rot) return;
+        const boneSchemaName = THREE.VRMSchema.HumanoidBoneName[key];
+        if (!boneSchemaName) return;
+        const bone = vrm.humanoid.getBoneNode(boneSchemaName);
+        if (!bone) return;
+        // Only wrist and thumb have x/y/z, others only z
+        if (joint === 'Wrist' || joint.startsWith('Thumb')) {
+            bone.rotation.x = rot.x;
+            bone.rotation.y = rot.y;
+            bone.rotation.z = rot.z;
+        } else {
+            bone.rotation.z = rot.z;
+        }
+    });
+};
+
 /* VRM Character Animator */
 const animateVRM = (vrm, results) => {
     if (!vrm) return;
@@ -182,11 +218,11 @@ const animateVRM = (vrm, results) => {
     // Animate Hands for VRM
     if (leftHandLandmarks && vrm) {
         const riggedLeftHand = Kalidokit.Hand.solve(leftHandLandmarks, "Left");
-        // Hand animation code...
+        rigHand(vrm, riggedLeftHand, 'Left');
     }
     if (rightHandLandmarks && vrm) {
         const riggedRightHand = Kalidokit.Hand.solve(rightHandLandmarks, "Right");
-        // Hand animation code...
+        rigHand(vrm, riggedRightHand, 'Right');
     }
 };
 
