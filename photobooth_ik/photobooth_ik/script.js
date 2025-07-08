@@ -22,7 +22,7 @@ orbitCamera.position.set(0.0, 1.4, 0.7);
 const orbitControls = new THREE.OrbitControls(orbitCamera, renderer.domElement);
 orbitControls.enabled = false;
 orbitControls.screenSpacePanning = true;
-orbitControls.target.set(0.0, 1.4, 0.0);
+orbitControls.target.set(0.0, 1.5, 0.0);
 orbitControls.update();
 
 // scene
@@ -33,7 +33,7 @@ const light = new THREE.DirectionalLight(0xffffff, 1);
 light.position.set(1.0, 1.0, 1.0).normalize();
 scene.add(light);
 
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+const ambientLight = new THREE.AmbientLight(0xffffff, 1);
 scene.add(ambientLight);
 
 // Main Render Loop
@@ -82,7 +82,7 @@ loader.load(
   );
 
 // Animation functions for default avatar
-const rigRotation = (name, rotation = { x: 0, y: 0, z: 0 }, dampener = 1, lerpAmount = 0.3) => {
+const rigRotation = (name, rotation = { x: 0, y: 0, z: 0 }, dampener = 0, lerpAmount = 1) => {
     if (!currentVrm) return;
     const Part = currentVrm.humanoid.getBoneNode(THREE.VRMSchema.HumanoidBoneName[name]);
     if (!Part) return;
@@ -96,7 +96,7 @@ const rigRotation = (name, rotation = { x: 0, y: 0, z: 0 }, dampener = 1, lerpAm
     Part.quaternion.slerp(quaternion, lerpAmount);
 };
 
-const rigPosition = (name, position = { x: 0, y: 0, z: 0 }, dampener = 1, lerpAmount = 0.3) => {
+const rigPosition = (name, position = { x: 0, y: 0, z: 0 }, dampener = 0, lerpAmount = 1) => {
     if (!currentVrm) return;
     const Part = currentVrm.humanoid.getBoneNode(THREE.VRMSchema.HumanoidBoneName[name]);
     if (!Part) return;
@@ -111,34 +111,34 @@ const rigPosition = (name, position = { x: 0, y: 0, z: 0 }, dampener = 1, lerpAm
 let oldLookTarget = new THREE.Euler();
 const rigFace = (riggedFace) => {
     if (!currentVrm) return;
-    rigRotation("Neck", riggedFace.head, 0.7);
+    rigRotation("Neck", riggedFace.head, 1);
 
     const Blendshape = currentVrm.blendShapeProxy;
     const PresetName = THREE.VRMSchema.BlendShapePresetName;
 
-    if (Blendshape && PresetName) {
-        riggedFace.eye.l = lerp(clamp(1 - riggedFace.eye.l, 0, 1), Blendshape.getValue(PresetName.Blink), .5);
-        riggedFace.eye.r = lerp(clamp(1 - riggedFace.eye.r, 0, 1), Blendshape.getValue(PresetName.Blink), .5);
-        riggedFace.eye = Kalidokit.Face.stabilizeBlink(riggedFace.eye, riggedFace.head.y);
-        Blendshape.setValue(PresetName.Blink, riggedFace.eye.l);
+    // if (Blendshape && PresetName) {
+    //     riggedFace.eye.l = lerp(clamp(1 - riggedFace.eye.l, 0, 1), Blendshape.getValue(PresetName.Blink), .5);
+    //     riggedFace.eye.r = lerp(clamp(1 - riggedFace.eye.r, 0, 1), Blendshape.getValue(PresetName.Blink), .5);
+    //     riggedFace.eye = Kalidokit.Face.stabilizeBlink(riggedFace.eye, riggedFace.head.y);
+    //     Blendshape.setValue(PresetName.Blink, riggedFace.eye.l);
 
-        Blendshape.setValue(PresetName.I, lerp(riggedFace.mouth.shape.I, Blendshape.getValue(PresetName.I), .5));
-        Blendshape.setValue(PresetName.A, lerp(riggedFace.mouth.shape.A, Blendshape.getValue(PresetName.A), .5));
-        Blendshape.setValue(PresetName.E, lerp(riggedFace.mouth.shape.E, Blendshape.getValue(PresetName.E), .5));
-        Blendshape.setValue(PresetName.O, lerp(riggedFace.mouth.shape.O, Blendshape.getValue(PresetName.O), .5));
-        Blendshape.setValue(PresetName.U, lerp(riggedFace.mouth.shape.U, Blendshape.getValue(PresetName.U), .5));
+    //     Blendshape.setValue(PresetName.I, lerp(riggedFace.mouth.shape.I, Blendshape.getValue(PresetName.I), .5));
+    //     Blendshape.setValue(PresetName.A, lerp(riggedFace.mouth.shape.A, Blendshape.getValue(PresetName.A), .5));
+    //     Blendshape.setValue(PresetName.E, lerp(riggedFace.mouth.shape.E, Blendshape.getValue(PresetName.E), .5));
+    //     Blendshape.setValue(PresetName.O, lerp(riggedFace.mouth.shape.O, Blendshape.getValue(PresetName.O), .5));
+    //     Blendshape.setValue(PresetName.U, lerp(riggedFace.mouth.shape.U, Blendshape.getValue(PresetName.U), .5));
 
-        let lookTarget = new THREE.Euler(
-            lerp(oldLookTarget.x, riggedFace.pupil.y, .4),
-            lerp(oldLookTarget.y, riggedFace.pupil.x, .4),
-            0,
-            "XYZ"
-        );
-        oldLookTarget.copy(lookTarget);
-        if (currentVrm.lookAt) {
-            currentVrm.lookAt.applyer.lookAt(lookTarget);
-        }
-    }
+    //     let lookTarget = new THREE.Euler(
+    //         lerp(oldLookTarget.x, riggedFace.pupil.y, .4),
+    //         lerp(oldLookTarget.y, riggedFace.pupil.x, .4),
+    //         0,
+    //         "XYZ"
+    //     );
+    //     oldLookTarget.copy(lookTarget);
+    //     if (currentVrm.lookAt) {
+    //         currentVrm.lookAt.applyer.lookAt(lookTarget);
+    //     }
+    // }
 };
 
 // Robust hand and finger rigging for VRM using Kalidokit.Hand.solve output
