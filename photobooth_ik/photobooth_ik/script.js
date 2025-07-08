@@ -2,6 +2,26 @@ const remap = Kalidokit.Utils.remap;
 const clamp = Kalidokit.Utils.clamp;
 const lerp = Kalidokit.Vector.lerp;
 
+// Default values
+let globalDampener = 0.7;
+let globalLerpAmount = 0.3;
+
+// UI elements
+const dampenerSlider = document.getElementById('dampenerSlider');
+const lerpSlider = document.getElementById('lerpSlider');
+const dampenerValue = document.getElementById('dampenerValue');
+const lerpValue = document.getElementById('lerpValue');
+
+// Update global variables and UI on slider change
+dampenerSlider.addEventListener('input', (e) => {
+  globalDampener = parseFloat(e.target.value);
+  dampenerValue.textContent = globalDampener;
+});
+lerpSlider.addEventListener('input', (e) => {
+  globalLerpAmount = parseFloat(e.target.value);
+  lerpValue.textContent = globalLerpAmount;
+});
+
 /* THREEJS WORLD SETUP */
 let currentVrm;
 let showLandmarks = true;
@@ -54,20 +74,25 @@ const loader = new THREE.GLTFLoader();
 loader.crossOrigin = "anonymous";
 
 loader.load(
-    "models/vijay.vrm",
+    "models/test.vrm",
   
     gltf => {
-      THREE.VRMUtils.removeUnnecessaryJoints(gltf.scene);
+      //THREE.VRMUtils.removeUnnecessaryJoints(gltf.scene);
   
       THREE.VRM.from(gltf).then(vrm => {
         scene.add(vrm.scene);
         currentVrm = vrm;
         currentVrm.scene.rotation.y = Math.PI; // Rotate model 180deg to face camera
-        currentVrm.scene.position.z = -2;
-        currentVrm.scene.position.x = -2; // Move avatar 2 units away from the camera
+        currentVrm.scene.rotation.x = 0.2
+
+        currentVrm.scene.position.y = 1; // up
+        currentVrm.scene.position.z = -3; // move closer to camera
+        currentVrm.scene.position.x = 0; // move side ways
         // Hide loading screen after avatar is loaded
         const loadingElem = document.getElementById('loading');
         if (loadingElem) loadingElem.style.display = 'none';
+        // Print all bones in the model for debugging
+        printAllBones(currentVrm);
       });
     },
   
@@ -82,63 +107,37 @@ loader.load(
   );
 
 // Animation functions for default avatar
-const rigRotation = (name, rotation = { x: 0, y: 0, z: 0 }, dampener = 0, lerpAmount = 1) => {
+const rigRotation = (name, rotation = { x: 0, y: 0, z: 0 }) => {
     if (!currentVrm) return;
     const Part = currentVrm.humanoid.getBoneNode(THREE.VRMSchema.HumanoidBoneName[name]);
     if (!Part) return;
     
     let euler = new THREE.Euler(
-        rotation.x * dampener,
-        rotation.y * dampener,
-        rotation.z * dampener
+        rotation.x * globalDampener,
+        rotation.y * globalDampener,
+        rotation.z * globalDampener
     );
     let quaternion = new THREE.Quaternion().setFromEuler(euler);
-    Part.quaternion.slerp(quaternion, lerpAmount);
+    Part.quaternion.slerp(quaternion, globalLerpAmount);
 };
 
-const rigPosition = (name, position = { x: 0, y: 0, z: 0 }, dampener = 0, lerpAmount = 1) => {
+const rigPosition = (name, position = { x: 0, y: 0, z: 0 }) => {
     if (!currentVrm) return;
     const Part = currentVrm.humanoid.getBoneNode(THREE.VRMSchema.HumanoidBoneName[name]);
     if (!Part) return;
     let vector = new THREE.Vector3(
-        position.x * dampener,
-        position.y * dampener,
-        position.z * dampener
+        position.x * globalDampener,
+        position.y * globalDampener,
+        position.z * globalDampener
     );
-    Part.position.lerp(vector, lerpAmount);
+    Part.position.lerp(vector, globalLerpAmount);
 };
 
 let oldLookTarget = new THREE.Euler();
 const rigFace = (riggedFace) => {
     if (!currentVrm) return;
-    rigRotation("Neck", riggedFace.head, 1);
+    rigRotation("Neck", riggedFace.head);
 
-    const Blendshape = currentVrm.blendShapeProxy;
-    const PresetName = THREE.VRMSchema.BlendShapePresetName;
-
-    // if (Blendshape && PresetName) {
-    //     riggedFace.eye.l = lerp(clamp(1 - riggedFace.eye.l, 0, 1), Blendshape.getValue(PresetName.Blink), .5);
-    //     riggedFace.eye.r = lerp(clamp(1 - riggedFace.eye.r, 0, 1), Blendshape.getValue(PresetName.Blink), .5);
-    //     riggedFace.eye = Kalidokit.Face.stabilizeBlink(riggedFace.eye, riggedFace.head.y);
-    //     Blendshape.setValue(PresetName.Blink, riggedFace.eye.l);
-
-    //     Blendshape.setValue(PresetName.I, lerp(riggedFace.mouth.shape.I, Blendshape.getValue(PresetName.I), .5));
-    //     Blendshape.setValue(PresetName.A, lerp(riggedFace.mouth.shape.A, Blendshape.getValue(PresetName.A), .5));
-    //     Blendshape.setValue(PresetName.E, lerp(riggedFace.mouth.shape.E, Blendshape.getValue(PresetName.E), .5));
-    //     Blendshape.setValue(PresetName.O, lerp(riggedFace.mouth.shape.O, Blendshape.getValue(PresetName.O), .5));
-    //     Blendshape.setValue(PresetName.U, lerp(riggedFace.mouth.shape.U, Blendshape.getValue(PresetName.U), .5));
-
-    //     let lookTarget = new THREE.Euler(
-    //         lerp(oldLookTarget.x, riggedFace.pupil.y, .4),
-    //         lerp(oldLookTarget.y, riggedFace.pupil.x, .4),
-    //         0,
-    //         "XYZ"
-    //     );
-    //     oldLookTarget.copy(lookTarget);
-    //     if (currentVrm.lookAt) {
-    //         currentVrm.lookAt.applyer.lookAt(lookTarget);
-    //     }
-    // }
 };
 
 // Robust hand and finger rigging for VRM using Kalidokit.Hand.solve output
@@ -146,7 +145,7 @@ const rigHand = (vrm, riggedHand, handedness = 'Right') => {
     if (!vrm || !riggedHand) return;
     const prefix = handedness.charAt(0).toUpperCase() + handedness.slice(1); // 'Right' or 'Left'
     const boneNames = [
-        'Wrist',
+        'Hand',
         'ThumbProximal', 'ThumbIntermediate', 'ThumbDistal',
         'IndexProximal', 'IndexIntermediate', 'IndexDistal',
         'MiddleProximal', 'MiddleIntermediate', 'MiddleDistal',
@@ -154,18 +153,35 @@ const rigHand = (vrm, riggedHand, handedness = 'Right') => {
         'LittleProximal', 'LittleIntermediate', 'LittleDistal'
     ];
     boneNames.forEach((joint) => {
-        const key = prefix + joint; // e.g., 'RightIndexProximal'
-        const rot = riggedHand[key];
-        if (!rot) return;
+        let key = prefix + joint; // e.g., 'RightIndexProximal'
         const boneSchemaName = THREE.VRMSchema.HumanoidBoneName[key];
         if (!boneSchemaName) return;
         const bone = vrm.humanoid.getBoneNode(boneSchemaName);
+
         if (!bone) return;
+
+
+        // enable this if you want movement in wrist
+
+        // if(key==="LeftHand"){
+        //     key="LeftWrist";
+        // }
+        // if(key==="RightHand"){
+        //     key="RightWrist";
+        // }
+        const rot = riggedHand[key];
+        if(key.includes("Wrist")){
+            console.log(rot);
+        }
+        if (!rot) return;
+        //console.log("key:",key,"rot:",rot, "boneSchema:", boneSchemaName)
+        
         // Only wrist and thumb have x/y/z, others only z
-        if (joint === 'Wrist' || joint.startsWith('Thumb')) {
+        if (joint === 'leftWrist' || joint === 'rightWrist' || joint.startsWith('Thumb')) {
+
             bone.rotation.x = rot.x;
-            bone.rotation.y = rot.y;
-            bone.rotation.z = rot.z;
+            bone.rotation.y = -rot.y;
+            bone.rotation.z = -rot.z;
         } else {
             bone.rotation.z = rot.z;
         }
@@ -178,8 +194,8 @@ const animateVRM = (vrm, results) => {
     const faceLandmarks = results.faceLandmarks;
     const pose3DLandmarks = results.ea;
     const pose2DLandmarks = results.poseLandmarks;
-    const leftHandLandmarks = results.rightHandLandmarks;
-    const rightHandLandmarks = results.leftHandLandmarks;
+    const leftHandLandmarks = results.leftHandLandmarks;
+    const rightHandLandmarks = results.rightHandLandmarks;
 
     // Animate Face for VRM
     if (faceLandmarks && vrm) {
@@ -196,23 +212,23 @@ const animateVRM = (vrm, results) => {
             runtime: "mediapipe",
             video: videoElement,
         });
-        rigRotation("Hips", riggedPose.Hips.rotation, 0.7);
+       // rigRotation("Hips", riggedPose.Hips.rotation);
         rigPosition("Hips", {
             x: -riggedPose.Hips.position.x,
             y: riggedPose.Hips.position.y + 1,
             z: -riggedPose.Hips.position.z
-        }, 1, 0.07);
+        });
 
-        rigRotation("Chest", riggedPose.Spine, 0.25, .3);
-        rigRotation("Spine", riggedPose.Spine, 0.45, .3);
-        rigRotation("RightUpperArm", riggedPose.RightUpperArm, 1, .3);
-        rigRotation("RightLowerArm", riggedPose.RightLowerArm, 1, .3);
-        rigRotation("LeftUpperArm", riggedPose.LeftUpperArm, 1, .3);
-        rigRotation("LeftLowerArm", riggedPose.LeftLowerArm, 1, .3);
-        rigRotation("LeftUpperLeg", riggedPose.LeftUpperLeg, 1, .3);
-        rigRotation("LeftLowerLeg", riggedPose.LeftLowerLeg, 1, .3);
-        rigRotation("RightUpperLeg", riggedPose.RightUpperLeg, 1, .3);
-        rigRotation("RightLowerLeg", riggedPose.RightLowerLeg, 1, .3);
+        rigRotation("Chest", riggedPose.Spine);
+        rigRotation("Spine", riggedPose.Spine);
+        rigRotation("RightUpperArm", riggedPose.RightUpperArm);
+        rigRotation("RightLowerArm", riggedPose.RightLowerArm);
+        rigRotation("LeftUpperArm", riggedPose.LeftUpperArm);
+        rigRotation("LeftLowerArm", riggedPose.LeftLowerArm);
+        //rigRotation("LeftUpperLeg", riggedPose.LeftUpperLeg);
+        //rigRotation("LeftLowerLeg", riggedPose.LeftLowerLeg);
+        //rigRotation("RightUpperLeg", riggedPose.RightUpperLeg);
+        //rigRotation("RightLowerLeg", riggedPose.RightLowerLeg);
     }
 
     // Animate Hands for VRM
@@ -414,3 +430,17 @@ window.addEventListener('resize', () => {
 renderer.domElement.addEventListener('contextmenu', (e) => {
     e.preventDefault();
 });
+
+function printAllBones(vrm) {
+    if (!vrm || !vrm.humanoid) {
+        console.log('No VRM or humanoid found.');
+        return;
+    }
+    const boneMap = vrm.humanoid.humanBones;
+    console.log('--- VRM Humanoid Bones ---');
+    for (const boneName in boneMap) {
+        const boneNode = boneMap[boneName]?.node;
+        console.log(`${boneName}:`, boneNode ? boneNode.name : 'Not mapped');
+    }
+    console.log('--------------------------');
+}
