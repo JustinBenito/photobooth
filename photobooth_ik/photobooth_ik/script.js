@@ -86,12 +86,13 @@ loader.load(
         currentVrm.scene.rotation.x = 0.2
 
         currentVrm.scene.position.y = 1; // up
-        currentVrm.scene.position.z = -3; // move closer to camera
+        currentVrm.scene.position.z = -5; // move closer to camera
         currentVrm.scene.position.x = 0; // move side ways
         // Hide loading screen after avatar is loaded
         const loadingElem = document.getElementById('loading');
         if (loadingElem) loadingElem.style.display = 'none';
         // Print all bones in the model for debugging
+        console.log("---------------------")
         printAllBones(currentVrm);
       });
     },
@@ -111,6 +112,7 @@ const rigRotation = (name, rotation = { x: 0, y: 0, z: 0 }) => {
     if (!currentVrm) return;
     const Part = currentVrm.humanoid.getBoneNode(THREE.VRMSchema.HumanoidBoneName[name]);
     if (!Part) return;
+
     
     let euler = new THREE.Euler(
         rotation.x * globalDampener,
@@ -118,6 +120,12 @@ const rigRotation = (name, rotation = { x: 0, y: 0, z: 0 }) => {
         rotation.z * globalDampener
     );
     let quaternion = new THREE.Quaternion().setFromEuler(euler);
+
+        
+    if(name=="RightLowerArm"){
+        console.log("heo",Part,quaternion )
+        // Part.rotation.x = Math.PI / 2; // or some large value
+    }
     Part.quaternion.slerp(quaternion, globalLerpAmount);
 };
 
@@ -157,29 +165,33 @@ const rigHand = (vrm, riggedHand, handedness = 'Right') => {
         const boneSchemaName = THREE.VRMSchema.HumanoidBoneName[key];
         if (!boneSchemaName) return;
         const bone = vrm.humanoid.getBoneNode(boneSchemaName);
-
         if (!bone) return;
 
-
         // enable this if you want movement in wrist
-
-        // if(key==="LeftHand"){
-        //     key="LeftWrist";
-        // }
-        // if(key==="RightHand"){
-        //     key="RightWrist";
-        // }
-        const rot = riggedHand[key];
-        if(key.includes("Wrist")){
-            console.log(rot);
+        if(key==="LeftHand"){
+            key="LeftWrist";
         }
+        if(key==="RightHand"){
+            key="RightWrist";
+        }
+        const rot = riggedHand[key];
         if (!rot) return;
-        //console.log("key:",key,"rot:",rot, "boneSchema:", boneSchemaName)
-        
+
+        // Apply correction quaternion for wrist to fix palm/knuckle inversion
+        if (key === "LeftWrist" || key === "RightWrist") {
+            // Convert to Three.js Euler
+            let euler = new THREE.Euler(-rot.x, -rot.y, -rot.z, "XYZ");
+            let quaternion = new THREE.Quaternion().setFromEuler(euler);
+            // Correction: flip palm/knuckle orientation (180 deg Y)
+            // let correction = new THREE.Quaternion();
+            // correction.setFromAxisAngle(new THREE.Vector3(0, 0, 0), Math.PI);
+            // quaternion.multiply(correction);
+            bone.quaternion.slerp(quaternion, globalLerpAmount);
+            return; // Skip the rest for wrist
+        }
         // Only wrist and thumb have x/y/z, others only z
         if (joint === 'leftWrist' || joint === 'rightWrist' || joint.startsWith('Thumb')) {
-
-            bone.rotation.x = rot.x;
+            bone.rotation.x = -rot.x;
             bone.rotation.y = -rot.y;
             bone.rotation.z = -rot.z;
         } else {
@@ -191,20 +203,23 @@ const rigHand = (vrm, riggedHand, handedness = 'Right') => {
 /* VRM Character Animator */
 const animateVRM = (vrm, results) => {
     if (!vrm) return;
-    const faceLandmarks = results.faceLandmarks;
+    //const faceLandmarks = results.faceLandmarks;
     const pose3DLandmarks = results.ea;
     const pose2DLandmarks = results.poseLandmarks;
-    const leftHandLandmarks = results.leftHandLandmarks;
-    const rightHandLandmarks = results.rightHandLandmarks;
+    const leftHandLandmarks = results.rightHandLandmarks;
+    const rightHandLandmarks = results.leftHandLandmarks;
+    console.log("Dhoo paaruda")
+    console.log("Pose3DLandmarks:", pose3DLandmarks);
+    console.log("Pose2DLandmarks:", pose2DLandmarks);
 
     // Animate Face for VRM
-    if (faceLandmarks && vrm) {
-        const riggedFace = Kalidokit.Face.solve(faceLandmarks, {
-            runtime: "mediapipe",
-            video: videoElement
-        });
-        rigFace(riggedFace);
-    }
+    // if (faceLandmarks && vrm) {
+    //     const riggedFace = Kalidokit.Face.solve(faceLandmarks, {
+    //         runtime: "mediapipe",
+    //         video: videoElement
+    //     });
+    //     rigFace(riggedFace);
+    // }
 
     // Animate Pose for VRM
     if (pose2DLandmarks && pose3DLandmarks && vrm) {
@@ -225,6 +240,10 @@ const animateVRM = (vrm, results) => {
         rigRotation("RightLowerArm", riggedPose.RightLowerArm);
         rigRotation("LeftUpperArm", riggedPose.LeftUpperArm);
         rigRotation("LeftLowerArm", riggedPose.LeftLowerArm);
+        rigRotation("LeftHand", riggedPose.LeftWrist);
+        rigRotation("RightHand", riggedPose.RightWrist);
+
+
         //rigRotation("LeftUpperLeg", riggedPose.LeftUpperLeg);
         //rigRotation("LeftLowerLeg", riggedPose.LeftLowerLeg);
         //rigRotation("RightUpperLeg", riggedPose.RightUpperLeg);
@@ -246,7 +265,25 @@ const animateVRM = (vrm, results) => {
 let videoElement = document.querySelector(".input_video");
 let guideCanvas = document.querySelector('canvas.guides');
 
+// Array to store all landmark data per frame
+let allLandmarkFrames = [];
+
 const onResults = (results) => {
+    // // Log all landmarks for debugging
+    // console.log('poseLandmarks:', results.poseLandmarks);
+    // console.log('faceLandmarks:', results.faceLandmarks);
+    // console.log('leftHandLandmarks:', results.leftHandLandmarks);
+    // console.log('rightHandLandmarks:', results.rightHandLandmarks);
+
+    // Collect and store landmark data for this frame
+    allLandmarkFrames.push({
+        timestamp: Date.now(),
+        poseLandmarks: results.poseLandmarks || null,
+        faceLandmarks: results.faceLandmarks || null,
+        leftHandLandmarks: results.leftHandLandmarks || null,
+        rightHandLandmarks: results.rightHandLandmarks || null
+    });
+
     if (showLandmarks) {
         drawResults(results);
     } else {
@@ -256,6 +293,25 @@ const onResults = (results) => {
     }
     animateVRM(currentVrm, results);
 };
+
+// Add a button to download the collected landmark data as JSON
+if (!document.getElementById('downloadLandmarksBtn')) {
+    const btn = document.createElement('button');
+    btn.id = 'downloadLandmarksBtn';
+    btn.textContent = 'Download Landmarks JSON';
+    btn.style.position = 'fixed';
+    btn.style.top = '10px';
+    btn.style.right = '10px';
+    btn.style.zIndex = 1000;
+    btn.onclick = function() {
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(allLandmarkFrames, null, 2));
+        const dlAnchorElem = document.createElement('a');
+        dlAnchorElem.setAttribute("href", dataStr);
+        dlAnchorElem.setAttribute("download", "landmarks_data.json");
+        dlAnchorElem.click();
+    };
+    document.body.appendChild(btn);
+}
 
 const holistic = new Holistic({
     locateFile: file => {
@@ -268,7 +324,7 @@ holistic.setOptions({
     smoothLandmarks: true,
     minDetectionConfidence: 0.7,
     minTrackingConfidence: 0.7,
-    refineFaceLandmarks: true,
+    refineFaceLandmarks: false,
 });
 
 holistic.onResults(onResults);
@@ -291,18 +347,18 @@ const drawResults = (results) => {
         });
     }
     
-    if (results.faceLandmarks) {
-        drawConnectors(canvasCtx, results.faceLandmarks, FACEMESH_TESSELATION, {
-            color: "#C0C0C070",
-            lineWidth: 1
-        });
-        if (results.faceLandmarks.length === 478) {
-            drawLandmarks(canvasCtx, [results.faceLandmarks[468], results.faceLandmarks[468+5]], {
-                color: "#ffe603",
-                lineWidth: 2
-            });
-        }
-    }
+    // if (results.faceLandmarks) {
+    //     drawConnectors(canvasCtx, results.faceLandmarks, FACEMESH_TESSELATION, {
+    //         color: "#C0C0C070",
+    //         lineWidth: 1
+    //     });
+    //     if (results.faceLandmarks.length === 478) {
+    //         drawLandmarks(canvasCtx, [results.faceLandmarks[468], results.faceLandmarks[468+5]], {
+    //             color: "#ffe603",
+    //             lineWidth: 2
+    //         });
+    //     }
+    // }
     
     if (results.leftHandLandmarks) {
         drawConnectors(canvasCtx, results.leftHandLandmarks, HAND_CONNECTIONS, {
