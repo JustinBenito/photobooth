@@ -4,23 +4,9 @@ const lerp = Kalidokit.Vector.lerp;
 
 // Default values
 let globalDampener = 0.7;
-let globalLerpAmount = 0.3;
+let globalLerpAmount = 0.7;
 
 // UI elements
-const dampenerSlider = document.getElementById('dampenerSlider');
-const lerpSlider = document.getElementById('lerpSlider');
-const dampenerValue = document.getElementById('dampenerValue');
-const lerpValue = document.getElementById('lerpValue');
-
-// Update global variables and UI on slider change
-dampenerSlider.addEventListener('input', (e) => {
-  globalDampener = parseFloat(e.target.value);
-  dampenerValue.textContent = globalDampener;
-});
-lerpSlider.addEventListener('input', (e) => {
-  globalLerpAmount = parseFloat(e.target.value);
-  lerpValue.textContent = globalLerpAmount;
-});
 
 /* THREEJS WORLD SETUP */
 let currentVrm;
@@ -143,9 +129,25 @@ const rigPosition = (name, position = { x: 0, y: 0, z: 0 }) => {
 
 let oldLookTarget = new THREE.Euler();
 const rigFace = (riggedFace) => {
-    if (!currentVrm) return;
-    rigRotation("Neck", riggedFace.head);
+    if (!currentVrm || !riggedFace) return;
+    try {
+        // Head rotation
+        rigRotation("Neck", riggedFace.head);
 
+        // Eye movement (look at)
+        if (currentVrm.lookAt && riggedFace.eye && riggedFace.eye.l && riggedFace.eye.r) {
+            // Use average of both eyes for stability
+            const lookX = (riggedFace.eye.l.x + riggedFace.eye.r.x) / 2;
+            const lookY = (riggedFace.eye.l.y + riggedFace.eye.r.y) / 2;
+            if (currentVrm.lookAt.target) {
+                currentVrm.lookAt.target.x = lookX;
+                currentVrm.lookAt.target.y = lookY;
+            }
+        }
+
+    } catch (err) {
+        console.error('Error in rigFace:', err);
+    }
 };
 
 // Robust hand and finger rigging for VRM using Kalidokit.Hand.solve output
@@ -180,7 +182,7 @@ const rigHand = (vrm, riggedHand, handedness = 'Right') => {
         // Apply correction quaternion for wrist to fix palm/knuckle inversion
         if (key === "LeftWrist" || key === "RightWrist") {
             // Convert to Three.js Euler
-            let euler = new THREE.Euler(-rot.x, -rot.y, -rot.z, "XYZ");
+            let euler = new THREE.Euler(-rot.x*globalDampener, -rot.y*globalDampener, -rot.z*globalDampener, "XYZ");
             let quaternion = new THREE.Quaternion().setFromEuler(euler);
             // Correction: flip palm/knuckle orientation (180 deg Y)
             // let correction = new THREE.Quaternion();
@@ -201,6 +203,21 @@ const rigHand = (vrm, riggedHand, handedness = 'Right') => {
 };
 
 /* VRM Character Animator */
+let faceMovementsEnabled = false;
+
+// Setup face toggle button
+const faceToggleBtn = document.getElementById('faceToggle');
+faceToggleBtn.addEventListener('click', () => {
+    faceMovementsEnabled = !faceMovementsEnabled;
+    if (faceMovementsEnabled) {
+        faceToggleBtn.textContent = 'Disable Face Movements';
+        faceToggleBtn.classList.add('active');
+    } else {
+        faceToggleBtn.textContent = 'Enable Face Movements';
+        faceToggleBtn.classList.remove('active');
+    }
+});
+
 const animateVRM = (vrm, results) => {
     if (!vrm) return;
     //const faceLandmarks = results.faceLandmarks;
@@ -213,13 +230,13 @@ const animateVRM = (vrm, results) => {
     console.log("Pose2DLandmarks:", pose2DLandmarks);
 
     // Animate Face for VRM
-    // if (faceLandmarks && vrm) {
-    //     const riggedFace = Kalidokit.Face.solve(faceLandmarks, {
-    //         runtime: "mediapipe",
-    //         video: videoElement
-    //     });
-    //     rigFace(riggedFace);
-    // }
+    if (faceMovementsEnabled && results.faceLandmarks && vrm) {
+        const riggedFace = Kalidokit.Face.solve(results.faceLandmarks, {
+            runtime: "mediapipe",
+            video: videoElement
+        });
+        rigFace(riggedFace);
+    }
 
     // Animate Pose for VRM
     if (pose2DLandmarks && pose3DLandmarks && vrm) {
@@ -269,13 +286,7 @@ let guideCanvas = document.querySelector('canvas.guides');
 let allLandmarkFrames = [];
 
 const onResults = (results) => {
-    // // Log all landmarks for debugging
-    // console.log('poseLandmarks:', results.poseLandmarks);
-    // console.log('faceLandmarks:', results.faceLandmarks);
-    // console.log('leftHandLandmarks:', results.leftHandLandmarks);
-    // console.log('rightHandLandmarks:', results.rightHandLandmarks);
 
-    // Collect and store landmark data for this frame
     allLandmarkFrames.push({
         timestamp: Date.now(),
         poseLandmarks: results.poseLandmarks || null,
@@ -285,7 +296,7 @@ const onResults = (results) => {
     });
 
     if (showLandmarks) {
-        drawResults(results);
+        //drawResults(results);
     } else {
         // Clear the guide canvas
         let canvasCtx = guideCanvas.getContext('2d');
@@ -294,24 +305,6 @@ const onResults = (results) => {
     animateVRM(currentVrm, results);
 };
 
-// Add a button to download the collected landmark data as JSON
-if (!document.getElementById('downloadLandmarksBtn')) {
-    const btn = document.createElement('button');
-    btn.id = 'downloadLandmarksBtn';
-    btn.textContent = 'Download Landmarks JSON';
-    btn.style.position = 'fixed';
-    btn.style.top = '10px';
-    btn.style.right = '10px';
-    btn.style.zIndex = 1000;
-    btn.onclick = function() {
-        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(allLandmarkFrames, null, 2));
-        const dlAnchorElem = document.createElement('a');
-        dlAnchorElem.setAttribute("href", dataStr);
-        dlAnchorElem.setAttribute("download", "landmarks_data.json");
-        dlAnchorElem.click();
-    };
-    document.body.appendChild(btn);
-}
 
 const holistic = new Holistic({
     locateFile: file => {
@@ -347,18 +340,6 @@ const drawResults = (results) => {
         });
     }
     
-    // if (results.faceLandmarks) {
-    //     drawConnectors(canvasCtx, results.faceLandmarks, FACEMESH_TESSELATION, {
-    //         color: "#C0C0C070",
-    //         lineWidth: 1
-    //     });
-    //     if (results.faceLandmarks.length === 478) {
-    //         drawLandmarks(canvasCtx, [results.faceLandmarks[468], results.faceLandmarks[468+5]], {
-    //             color: "#ffe603",
-    //             lineWidth: 2
-    //         });
-    //     }
-    // }
     
     if (results.leftHandLandmarks) {
         drawConnectors(canvasCtx, results.leftHandLandmarks, HAND_CONNECTIONS, {
@@ -405,24 +386,7 @@ function showStatus(message) {
     }, 3000);
 }
 
-// Toggle landmarks
-document.getElementById('landmarksToggle').addEventListener('click', () => {
-    showLandmarks = !showLandmarks;
-    document.getElementById('landmarksToggle').textContent = showLandmarks ? 'Hide Landmarks' : 'Show Landmarks';
-    if (!showLandmarks) {
-        let canvasCtx = guideCanvas.getContext('2d');
-        canvasCtx.clearRect(0, 0, guideCanvas.width, guideCanvas.height);
-    }
-});
 
-// Toggle avatar
-document.getElementById('avatarToggle').addEventListener('click', () => {
-    showAvatar = !showAvatar;
-    document.getElementById('avatarToggle').textContent = showAvatar ? 'Hide Avatar' : 'Show Avatar';
-    if (currentVrm) {
-        currentVrm.scene.visible = showAvatar;
-    }
-});
 
 // Photo capture
 document.getElementById('captureBtn').addEventListener('click', capturePhoto);
